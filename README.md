@@ -4,6 +4,17 @@ A full-stack internal tool for a small agency to manage client projects, assign
 tasks, and watch team activity update live, with three strictly separated
 access levels (Admin / Project Manager / Developer) enforced at the API layer.
 
+## Live Links
+
+- **App**: https://task-flow-six-xi.vercel.app/
+- **API**: https://taskflow-atga.onrender.com/
+- **Repo**: https://github.com/swaraj1917/TaskFlow
+
+The backend is on Render's free tier, which spins down after 15 minutes of
+inactivity — if the app hasn't been visited recently, the first request can
+take 30–50 seconds to respond while it wakes back up. That's expected, not a
+bug; every request after that first one is normal speed.
+
 ---
 
 ## Stack
@@ -12,7 +23,7 @@ access levels (Admin / Project Manager / Developer) enforced at the API layer.
 |------------|-------------------------------------------|
 | Frontend   | React 19 + TypeScript (Vite)              |
 | Backend    | Node.js + Express 5 + TypeScript          |
-| Database   | PostgreSQL 17                             |
+| Database   | PostgreSQL (Neon in production; local Postgres via Docker for dev) |
 | ORM        | Prisma                                    |
 | Real-time  | Socket.io                                 |
 | Background jobs | node-cron                           |
@@ -77,6 +88,25 @@ npm run dev               # http://localhost:5173
 | Admin           | admin@taskflow.com  |
 | Project Manager | pm1@taskflow.com / pm2@taskflow.com |
 | Developer       | dev1@taskflow.com … dev4@taskflow.com |
+
+These are the seeded accounts for demoing the app immediately. Beyond them,
+Admin can create additional real accounts (with any name, email, password,
+and role) from the **Users** tab — see below.
+
+---
+
+## User Management
+
+Admin has a **Users** panel (name/email/password/role → create; role-based
+tabs to browse Admin/PM/Developer separately) for onboarding real team
+members. There's deliberately **no public self-registration UI** — this is
+an internal agency tool, not a consumer product, so accounts should only
+exist because an Admin created them. A `POST /api/auth/register` endpoint
+does still exist for completeness, but it always hardcodes new signups to
+the lowest-privilege `DEVELOPER` role regardless of what's sent in the
+request — self-assigned roles (letting a new signup pick "Admin") would be a
+real privilege-escalation hole, not a convenience, so role assignment is an
+Admin-only action, gated the same way every other admin route is.
 
 ---
 
@@ -228,13 +258,27 @@ server and an always-running `node-cron` job) — so a literal "everything on
 Vercel" deployment isn't structurally compatible with the real-time and
 scheduled-job requirements.
 
-The deployment used instead:
+What's actually deployed:
 
 - **Frontend** → Vercel (a static Vite build — this part fits Vercel exactly
   as intended)
-- **Backend** → Render (or Railway) — a normal long-running Node process,
-  which is what a stateful WebSocket server and a cron job both need
+- **Backend** → Render — a normal long-running Docker web service, which is
+  what a stateful WebSocket server and a cron job both need
+- **Database** → Neon, not Render's own free Postgres
 
 `CLIENT_URL` on the backend and `VITE_API_URL` / `VITE_SOCKET_URL` on the
 frontend are the only two things that change between environments; both are
 read from environment variables, not hardcoded.
+
+### Why Neon instead of Render's free Postgres
+
+Render's free Postgres tier is documented as suitable for evaluation, not
+anything meant to stay up — Render's own docs state a free Postgres instance
+can be restarted for maintenance at any time, and in practice this surfaced
+as real, unpredictable data loss during development: rows written and
+confirmed present would be gone an hour or two later, with no error, no
+warning, and no backup to recover from (free Postgres on Render has none).
+Neon's free tier doesn't carry that same idle-restart behavior, so the
+database was moved there instead. Everything else about the setup —
+Prisma, the schema, the seed script — is identical; only the connection
+string changed, since Neon is a standard Postgres endpoint.
