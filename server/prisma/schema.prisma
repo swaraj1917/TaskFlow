@@ -1,0 +1,185 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+// =========================
+// ENUMS
+// =========================
+
+enum Role {
+  ADMIN
+  PROJECT_MANAGER
+  DEVELOPER
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  IN_REVIEW
+  DONE
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+
+// =========================
+// USER
+// =========================
+
+model User {
+  id           Int      @id @default(autoincrement())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  projectsCreated Project[]      @relation("ProjectCreator")
+  tasksAssigned   Task[]         @relation("TaskDeveloper")
+  activities      TaskActivity[]
+  notifications   Notification[]
+  refreshTokens   RefreshToken[]
+}
+
+
+// =========================
+// CLIENT
+// =========================
+
+model Client {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String?
+  company   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projects Project[]
+}
+
+
+// =========================
+// PROJECT
+// =========================
+
+model Project {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  clientId Int
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  createdById Int
+  createdBy   User @relation("ProjectCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  tasks      Task[]
+  activities TaskActivity[]
+
+  @@index([clientId])
+  @@index([createdById])
+}
+
+
+// =========================
+// TASK
+// =========================
+
+model Task {
+  id          Int          @id @default(autoincrement())
+  title       String
+  description String?
+  status      TaskStatus   @default(TODO)
+  priority    TaskPriority  @default(MEDIUM)
+  dueDate     DateTime?
+  isOverdue   Boolean      @default(false)
+
+  projectId Int
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  assignedDeveloperId Int
+  assignedDeveloper   User @relation("TaskDeveloper", fields: [assignedDeveloperId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  activities TaskActivity[]
+
+  @@index([projectId, status])
+  @@index([assignedDeveloperId, status])
+  @@index([dueDate])
+  @@index([priority])
+}
+
+
+// =========================
+// TASK ACTIVITY
+// =========================
+
+model TaskActivity {
+  id        Int      @id @default(autoincrement())
+  taskId    Int
+  projectId Int
+  userId    Int
+
+  fromStatus TaskStatus?
+  toStatus   TaskStatus
+
+  createdAt DateTime @default(now())
+
+  task    Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
+  @@index([taskId, createdAt])
+}
+
+
+// =========================
+// NOTIFICATION
+// =========================
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read, createdAt])
+}
+
+
+// =========================
+// REFRESH TOKEN
+// =========================
+
+model RefreshToken {
+  id        Int      @id @default(autoincrement())
+  tokenHash String   @unique
+  userId    Int
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}

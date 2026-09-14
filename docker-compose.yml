@@ -1,0 +1,52 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: taskflow-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: taskflow
+      POSTGRES_PASSWORD: taskflow_password
+      POSTGRES_DB: taskflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - taskflow_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taskflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  server:
+    build:
+      context: ./server
+    container_name: taskflow-server
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "postgresql://taskflow:taskflow_password@postgres:5432/taskflow"
+      ACCESS_TOKEN_SECRET: "taskflow_access_secret_change_this"
+      REFRESH_TOKEN_SECRET: "taskflow_refresh_secret_change_this"
+      CLIENT_URL: "http://localhost:5173"
+      PORT: 5000
+      NODE_ENV: production
+    ports:
+      - "5000:5000"
+
+  client:
+    build:
+      context: ./client
+      args:
+        VITE_API_URL: "http://localhost:5000/api"
+        VITE_SOCKET_URL: "http://localhost:5000"
+    container_name: taskflow-client
+    restart: unless-stopped
+    depends_on:
+      - server
+    ports:
+      - "5173:80"
+
+volumes:
+  taskflow_postgres_data:
